@@ -1,7 +1,7 @@
 """
 M1 HTTP client for V2 backend.
 Implements IF-M1-V2 and IF-V2-M1 per IS §3.
-Base URL: https://dsd2026-teamv2-production.up.railway.app
+Base URL: http://113.44.220.94:3000
 Request: camelCase, Response: snake_case, Timestamps: ISO 8601.
 """
 
@@ -15,7 +15,7 @@ import requests
 
 LOGGER = logging.getLogger("m1.api_client")
 
-BASE_URL = "https://dsd2026-teamv2-production.up.railway.app"
+BASE_URL = "http://113.44.220.94:3000"
 
 
 class V2ApiClient:

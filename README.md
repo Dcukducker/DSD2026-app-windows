@@ -403,7 +403,7 @@ where `V_a · V_b` is the dot product, clamped to [-1, 1] for numerical safety.
 
 M1 communicates with the V2 backend server via HTTP REST API.
 
-**Base URL**: `https://dsd2026-teamv2-production.up.railway.app`
+**Base URL**: `http://113.44.220.94:3000`
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
