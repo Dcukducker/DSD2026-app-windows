@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limb Motion Recognition - Rehabilitation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 20px; color: #2c3e50; }
+        .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card h2 { margin-bottom: 12px; font-size: 18px; color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 6px; }
+        .row { display: flex; gap: 16px; flex-wrap: wrap; }
+        .col { flex: 1; min-width: 300px; }
+        label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 14px; }
+        input, select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; font-size: 14px; }
+        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; margin-right: 8px; margin-bottom: 8px; }
+        .btn-primary { background: #3498db; color: #fff; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-danger { background: #e74c3c; color: #fff; }
+        .btn-warning { background: #f39c12; color: #fff; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status { padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; font-size: 14px; }
+        .status-info { background: #d4edfa; color: #2980b9; }
+        .status-success { background: #d5f5e3; color: #27ae60; }
+        .status-error { background: #fadbd8; color: #e74c3c; }
+        #log { background: #2c3e50; color: #ecf0f1; padding: 12px; border-radius: 4px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; white-space: pre-wrap; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .data-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+        .data-item { background: #f8f9fa; padding: 8px; border-radius: 4px; text-align: center; }
+        .data-item .value { font-size: 20px; font-weight: 700; color: #2c3e50; }
+        .data-item .label { font-size: 11px; color: #7f8c8d; }
+        .hidden { display: none; }
+        #angleLineChart { width: 100%; height: 300px; background: #f8f9fa; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Limb Motion Recognition & Assistant</h1>
+
+        <!-- Auth Section -->
+        <div id="authSection" class="card">
+            <h2>Authentication</h2>
+            <div class="row">
+                <div class="col">
+                    <h3 style="margin-bottom:8px">Login</h3>
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" value="">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" value="">
+                    <button class="btn-primary" onclick="doLogin()">Login</button>
+                </div>
+                <div class="col">
+                    <h3 style="margin-bottom:8px">Register</h3>
+                    <label>Name</label>
+                    <input type="text" id="regName">
+                    <label>Email</label>
+                    <input type="email" id="regEmail">
+                    <label>Password</label>
+                    <input type="password" id="regPassword">
+                    <button class="btn-success" onclick="doRegister()">Register</button>
+                </div>
+            </div>
+            <div id="authStatus" class="status status-info">Not logged in</div>
+        </div>
+
+        <!-- Session Control -->
+        <div id="sessionSection" class="card hidden">
+            <h2>Session Control</h2>
+            <!-- Data Source Mode -->
+            <div style="margin-bottom:12px;padding:12px;background:#f8f9fa;border-radius:4px">
+                <label style="margin-bottom:6px">Data Source</label>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <button class="btn-primary" id="btnModeSim" onclick="setMode('simulator')" style="opacity:1">Simulator</button>
+                    <button class="btn-warning" id="btnModeReal" onclick="setMode('real')" style="opacity:0.5">Real BLE Sensors</button>
+                    <span id="modeStatus" style="font-size:13px;color:#7f8c8d;margin-left:8px">Mode: Simulator</span>
+                </div>
+                <!-- BLE Sensor Configuration (collapsible) -->
+                <div id="bleConfigSection" style="margin-top:10px;display:none">
+                    <label>Sensor MAC Addresses (one per line)</label>
+                    <textarea id="bleAddresses" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:13px" placeholder="AA:BB:CC:DD:EE:F1
+AA:BB:CC:DD:EE:F2"></textarea>
+                    <div style="font-size:11px;color:#7f8c8d;margin:4px 0">Enter BLE MAC addresses from your WitMotion IMU sensors, one per line.</div>
+                    <button class="btn-success" onclick="configureSensors()" style="margin-top:4px">Apply</button>
+                    <span id="bleConfigStatus" style="font-size:12px;margin-left:8px"></span>
+                </div>
+                <a href="#" onclick="toggleBleConfig(); return false" style="font-size:12px;margin-top:6px;display:inline-block">Configure BLE sensors...</a>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <label>Exercise Type</label>
+                    <input type="text" id="exerciseType" value="bend_knee_10">
+                    <label>Sensor Binding Method</label>
+                    <select id="bindMode" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:4px;margin-bottom:10px;font-size:14px">
+                        <option value="back">Back-mount: mounting face on limb (roll+pitch)</option>
+                        <option value="port">Connector-mount: connector edge along limb (roll+pitch+yaw)</option>
+                        <option value="screen">Screen-mount: component-face normal along limb (roll+pitch)</option>
+                    </select>
+                    <label>Sensor-Joint Mapping (JSON)</label>
+                    <textarea id="sensorMapping" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:13px">{
+  "SIM_SENSOR_A": "left_knee",
+  "SIM_SENSOR_B": "left_knee"
+}</textarea>
+                </div>
+                <div class="col" style="display:flex;flex-direction:column;justify-content:center;gap:8px;">
+                    <button class="btn-success" id="btnStart" onclick="startSession()">Start Session</button>
+                    <button class="btn-danger" id="btnStop" onclick="stopSession()" disabled>Stop Session</button>
+                    <div id="sessionStatus" class="status status-info">No active session</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Data -->
+        <div id="dataSection" class="card hidden">
+            <h2>Real-time Sensor Data</h2>
+            <!-- Summary cards row -->
+            <div class="data-grid" style="margin-bottom:12px">
+                <div class="data-item"><div class="value" id="valSamples">0</div><div class="label">Samples</div></div>
+                <div class="data-item"><div class="value" id="valAngles">0</div><div class="label">Angles</div></div>
+                <div class="data-item"><div class="value" id="valErrors">0</div><div class="label">Errors</div></div>
+            </div>
+            <!-- Joint angle cards (dynamic) -->
+            <div id="jointAngleGrid" class="data-grid" style="margin-bottom:16px"></div>
+            <!-- Angle line chart -->
+            <h3 style="margin-bottom:8px">Joint Angle History</h3>
+            <canvas id="angleLineChart"></canvas>
+            <!-- Recent Sensor Samples -->
+            <div style="margin-top:16px">
+                <h3 style="margin-bottom:8px">Recent Sensor Samples</h3>
+                <div style="max-height:200px;overflow-y:auto">
+                    <table>
+                        <thead><tr><th>Time</th><th>Sensor</th><th>Roll</th><th>Pitch</th><th>Yaw</th><th>AccX</th><th>AccY</th><th>AccZ</th><th>GyroX</th><th>GyroY</th><th>GyroZ</th></tr></thead>
+                        <tbody id="sampleTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Target Angles Table -->
+            <div style="margin-top:12px">
+                <h3 style="margin-bottom:8px">Target Angles Log</h3>
+                <div style="max-height:150px;overflow-y:auto">
+                    <table>
+                        <thead><tr><th>Time</th><th>Joint</th><th>Angle</th></tr></thead>
+                        <tbody id="angleTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Errors Table -->
+            <div style="margin-top:12px">
+                <h3 style="margin-bottom:8px">Errors</h3>
+                <div style="max-height:150px;overflow-y:auto">
+                    <table>
+                        <thead><tr><th>Time</th><th>Sensor</th><th>Type</th><th>Message</th></tr></thead>
+                        <tbody id="errorTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div id="recoSection" class="card hidden">
+            <h2>AI Recommendations</h2>
+            <button class="btn-primary" onclick="loadRecommendations()">Load Recommendations</button>
+            <div id="recoContent" style="margin-top:10px"></div>
+        </div>
+
+        <!-- Log -->
+        <div class="card">
+            <h2>System Log</h2>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let authToken = null;
+        let userId = null;
+        let userName = null;
+        let currentSessionId = null;
+        let pollTimer = null;
+        let totalSamples = 0;
+        let totalAngles = 0;
+        let totalErrors = 0;
+        let angleHistory = {};
+        let sessionStartTime = null;
+        const JOINT_COLORS = ['#3498db','#e74c3c','#27ae60','#f39c12','#9b59b6','#1abc9c','#e67e22','#2c3e50'];
+
+        function log(msg) {
+            const el = document.getElementById('log');
+            const ts = new Date().toLocaleTimeString();
+            el.textContent += `[${ts}] ${msg}\n`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        async function apiCall(url, options = {}) {
+            const resp = await fetch(url, {
+                headers: { 'Content-Type': 'application/json', ...options.headers },
+                ...options,
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+            return data;
+        }
+
+        // Auth
+        async function doLogin() {
+            try {
+                const result = await apiCall('/api/login', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        email: document.getElementById('loginEmail').value,
+                        password: document.getElementById('loginPassword').value,
+                    }),
+                });
+                authToken = result.token;
+                userId = result.user.id;
+                userName = result.user.name;
+                document.getElementById('authStatus').className = 'status status-success';
+                document.getElementById('authStatus').textContent = `Logged in as ${userName} (ID: ${userId})`;
+                document.getElementById('sessionSection').classList.remove('hidden');
+                document.getElementById('recoSection').classList.remove('hidden');
+                loadMode();
+                log(`Login successful: ${userName}`);
+            } catch (e) {
+                document.getElementById('authStatus').className = 'status status-error';
+                document.getElementById('authStatus').textContent = `Login failed: ${e.message}`;
+                log(`Login failed: ${e.message}`);
+            }
+        }
+
+        async function doRegister() {
+            try {
+                const result = await apiCall('/api/register', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: document.getElementById('regName').value,
+                        email: document.getElementById('regEmail').value,
+                        password: document.getElementById('regPassword').value,
+                        role: 'patient',
+                    }),
+                });
+                authToken = result.token;
+                userId = result.user.id;
+                userName = result.user.name;
+                document.getElementById('authStatus').className = 'status status-success';
+                document.getElementById('authStatus').textContent = `Registered & logged in as ${userName} (ID: ${userId})`;
+                document.getElementById('sessionSection').classList.remove('hidden');
+                document.getElementById('recoSection').classList.remove('hidden');
+                log(`Registration successful: ${userName}`);
+            } catch (e) {
+                document.getElementById('authStatus').className = 'status status-error';
+                document.getElementById('authStatus').textContent = `Registration failed: ${e.message}`;
+                log(`Registration failed: ${e.message}`);
+            }
+        }
+
+        // Mode switching
+        async function loadMode() {
+            try {
+                const data = await apiCall('/api/mode');
+                updateModeUI(data.mode, data.realAvailable);
+            } catch (e) {}
+        }
+
+        async function setMode(mode) {
+            try {
+                await apiCall('/api/mode', {
+                    method: 'POST',
+                    body: JSON.stringify({ mode: mode }),
+                });
+                const data = await apiCall('/api/mode');
+                updateModeUI(data.mode, data.realAvailable);
+                log(`Data source mode switched to: ${mode}`);
+            } catch (e) {
+                log(`Mode switch failed: ${e.message}`);
+                alert(`Cannot switch mode: ${e.message}`);
+            }
+        }
+
+        function updateModeUI(mode, realAvailable) {
+            const btnSim = document.getElementById('btnModeSim');
+            const btnReal = document.getElementById('btnModeReal');
+            const status = document.getElementById('modeStatus');
+
+            if (mode === 'simulator') {
+                btnSim.style.opacity = '1';
+                btnReal.style.opacity = '0.5';
+                status.textContent = 'Mode: Simulator';
+            } else {
+                btnSim.style.opacity = '0.5';
+                btnReal.style.opacity = '1';
+                status.textContent = 'Mode: Real BLE';
+            }
+
+            btnReal.disabled = !realAvailable;
+            if (!realAvailable) {
+                btnReal.title = 'Configure BLE sensors first (click link below)';
+            } else {
+                btnReal.title = '';
+            }
+        }
+
+        function toggleBleConfig() {
+            const el = document.getElementById('bleConfigSection');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function configureSensors() {
+            const statusEl = document.getElementById('bleConfigStatus');
+            try {
+                const text = document.getElementById('bleAddresses').value.trim();
+                const addresses = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+                if (addresses.length === 0) {
+                    statusEl.style.color = '#e74c3c';
+                    statusEl.textContent = 'Please enter at least one MAC address';
+                    return;
+                }
+                const result = await apiCall('/api/sensors/configure', {
+                    method: 'POST',
+                    body: JSON.stringify({ addresses: addresses }),
+                });
+                statusEl.style.color = '#27ae60';
+                statusEl.textContent = result.message;
+                const modeData = await apiCall('/api/mode');
+                updateModeUI(modeData.mode, modeData.realAvailable);
+                log(`BLE sensors configured: ${addresses.length} device(s)`);
+            } catch (e) {
+                statusEl.style.color = '#e74c3c';
+                statusEl.textContent = `Failed: ${e.message}`;
+                log(`Sensor config failed: ${e.message}`);
+            }
+        }
+
+        // Session
+        async function startSession() {
+            try {
+                const v2Session = await apiCall('/api/session/create', {
+                    method: 'POST',
+                    body: JSON.stringify({ userId: userId, token: authToken }),
+                });
+                currentSessionId = v2Session.id;
+                log(`V2 session created: ID=${currentSessionId}`);
+
+                let mapping = {};
+                try {
+                    mapping = JSON.parse(document.getElementById('sensorMapping').value);
+                } catch (e) {
+                    log('Warning: Invalid sensor mapping JSON, using empty mapping');
+                }
+
+                const startResult = await apiCall('/api/session/start', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        sessionId: currentSessionId,
+                        userId: userId,
+                        sensorJointMapping: mapping,
+                        payloadStatus: document.getElementById('exerciseType').value + '-' + document.getElementById('bindMode').value,
+                    }),
+                });
+
+                if (!startResult.success) {
+                    throw new Error(startResult.errorMessage || 'S2 start failed');
+                }
+
+                await apiCall('/api/measurement/auto-upload/start', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        token: authToken,
+                        sessionId: currentSessionId,
+                        interval: 2.0,
+                    }),
+                });
+
+                document.getElementById('btnStart').disabled = true;
+                document.getElementById('btnStop').disabled = false;
+                document.getElementById('sessionStatus').className = 'status status-success';
+                document.getElementById('sessionStatus').textContent = `Session ${currentSessionId} active`;
+                document.getElementById('dataSection').classList.remove('hidden');
+                totalSamples = 0; totalAngles = 0; totalErrors = 0;
+                angleHistory = {};
+                sessionStartTime = Date.now();
+                startDataPolling();
+                log(`Session started: ID=${currentSessionId}`);
+            } catch (e) {
+                document.getElementById('sessionStatus').className = 'status status-error';
+                document.getElementById('sessionStatus').textContent = `Start failed: ${e.message}`;
+                log(`Session start failed: ${e.message}`);
+            }
+        }
+
+        async function stopSession() {
+            try {
+                await apiCall('/api/measurement/auto-upload/stop', { method: 'POST' });
+
+                const summary = await apiCall('/api/session/stop', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        token: authToken,
+                        sessionId: currentSessionId,
+                    }),
+                });
+
+                stopDataPolling();
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnStop').disabled = true;
+                document.getElementById('sessionStatus').className = 'status status-info';
+                document.getElementById('sessionStatus').textContent =
+                    `Session ended. Samples: ${summary.sampleCount}, Errors: ${summary.errorCount}`;
+                log(`Session stopped: ${summary.sampleCount} samples, ${summary.errorCount} errors`);
+                currentSessionId = null;
+            } catch (e) {
+                document.getElementById('sessionStatus').className = 'status status-error';
+                document.getElementById('sessionStatus').textContent = `Stop failed: ${e.message}`;
+                log(`Session stop failed: ${e.message}`);
+            }
+        }
+
+        // Data polling
+        function startDataPolling() {
+            pollTimer = setInterval(pollData, 500);
+        }
+
+        function stopDataPolling() {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        }
+
+        async function pollData() {
+            try {
+                const data = await apiCall('/api/data/read');
+                updateDataDisplay(data);
+            } catch (e) {}
+        }
+
+        function updateDataDisplay(data) {
+            totalSamples += data.sensorData.length;
+            totalAngles += data.targetAngles.length;
+            totalErrors += data.errors.length;
+
+            document.getElementById('valSamples').textContent = totalSamples;
+            document.getElementById('valAngles').textContent = totalAngles;
+            document.getElementById('valErrors').textContent = totalErrors;
+
+            // Update sample table (show last 10)
+            const tbody = document.getElementById('sampleTable');
+            for (const s of data.sensorData.slice(-10)) {
+                const row = tbody.insertRow(0);
+                const ts = new Date(s.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3});
+                row.innerHTML = `<td>${ts}</td><td>${s.deviceName}</td>` +
+                    `<td>${s.roll.toFixed(1)}</td><td>${s.pitch.toFixed(1)}</td><td>${s.yaw.toFixed(1)}</td>` +
+                    `<td>${s.accX.toFixed(3)}</td><td>${s.accY.toFixed(3)}</td><td>${s.accZ.toFixed(3)}</td>` +
+                    `<td>${s.gyroX.toFixed(1)}</td><td>${s.gyroY.toFixed(1)}</td><td>${s.gyroZ.toFixed(1)}</td>`;
+            }
+            while (tbody.rows.length > 20) tbody.deleteRow(tbody.rows.length - 1);
+
+            // Update angle history (full session, no truncation)
+            const aBody = document.getElementById('angleTable');
+            for (const a of data.targetAngles) {
+                const row = aBody.insertRow(0);
+                const ts = new Date(a.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3});
+                row.innerHTML = `<td>${ts}</td><td>${a.angleID}</td><td>${a.angle.toFixed(1)}&deg;</td>`;
+
+                if (!angleHistory[a.angleID]) angleHistory[a.angleID] = [];
+                const elapsed = (a.timestamp - sessionStartTime) / 1000; // seconds since start
+                angleHistory[a.angleID].push({ t: elapsed, angle: a.angle });
+            }
+            while (aBody.rows.length > 15) aBody.deleteRow(aBody.rows.length - 1);
+
+            // Update error table
+            const eBody = document.getElementById('errorTable');
+            for (const e of data.errors) {
+                const row = eBody.insertRow(0);
+                const ts = new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3});
+                row.innerHTML = `<td>${ts}</td><td>${e.sensorId || '-'}</td><td>${e.errorType}</td><td>${e.message}</td>`;
+            }
+            while (eBody.rows.length > 30) eBody.deleteRow(eBody.rows.length - 1);
+
+            updateJointCards();
+            drawAngleLineChart();
+        }
+
+        function updateJointCards() {
+            const grid = document.getElementById('jointAngleGrid');
+            const joints = Object.keys(angleHistory);
+            if (joints.length === 0) { grid.innerHTML = ''; return; }
+
+            let html = '';
+            joints.forEach((joint, i) => {
+                const vals = angleHistory[joint];
+                const current = vals.length > 0 ? vals[vals.length - 1].angle : 0;
+                const color = JOINT_COLORS[i % JOINT_COLORS.length];
+                html += `<div class="data-item" style="border-left:4px solid ${color}">` +
+                    `<div class="value">${current.toFixed(1)}&deg;</div>` +
+                    `<div class="label">${joint}</div></div>`;
+            });
+            grid.innerHTML = html;
+        }
+
+        function drawAngleLineChart() {
+            const canvas = document.getElementById('angleLineChart');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+
+            const W = rect.width;
+            const H = rect.height;
+            const PAD_L = 50, PAD_R = 20, PAD_T = 20, PAD_B = 35;
+            const plotW = W - PAD_L - PAD_R;
+            const plotH = H - PAD_T - PAD_B;
+
+            ctx.clearRect(0, 0, W, H);
+
+            const joints = Object.keys(angleHistory);
+            if (joints.length === 0) {
+                ctx.fillStyle = '#7f8c8d';
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Waiting for angle data...', W / 2, H / 2);
+                return;
+            }
+
+            // Determine time and angle ranges
+            let tMin = Infinity, tMax = -Infinity, aMin = Infinity, aMax = -Infinity;
+            for (const joint of joints) {
+                for (const p of angleHistory[joint]) {
+                    if (p.t < tMin) tMin = p.t;
+                    if (p.t > tMax) tMax = p.t;
+                    if (p.angle < aMin) aMin = p.angle;
+                    if (p.angle > aMax) aMax = p.angle;
+                }
+            }
+            if (tMin === tMax) tMax = tMin + 1;
+            // Add angle padding
+            const aPad = Math.max((aMax - aMin) * 0.1, 5);
+            aMin -= aPad; aMax += aPad;
+
+            function xOf(t) { return PAD_L + (t - tMin) / (tMax - tMin) * plotW; }
+            function yOf(a) { return PAD_T + (1 - (a - aMin) / (aMax - aMin)) * plotH; }
+
+            // Draw grid
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            // Horizontal grid lines (5 lines)
+            for (let i = 0; i <= 4; i++) {
+                const a = aMin + (aMax - aMin) * i / 4;
+                const y = yOf(a);
+                ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+                ctx.fillStyle = '#7f8c8d'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+                ctx.fillText(a.toFixed(0) + '\u00B0', PAD_L - 5, y + 4);
+            }
+            // Vertical time labels
+            ctx.textAlign = 'center';
+            const tSteps = Math.min(6, Math.ceil(tMax - tMin));
+            for (let i = 0; i <= tSteps; i++) {
+                const t = tMin + (tMax - tMin) * i / tSteps;
+                const x = xOf(t);
+                ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, PAD_T + plotH); ctx.stroke();
+                ctx.fillStyle = '#7f8c8d'; ctx.font = '11px sans-serif';
+                ctx.fillText(t.toFixed(1) + 's', x, H - PAD_B + 15);
+            }
+
+            // Draw lines
+            joints.forEach((joint, idx) => {
+                const pts = angleHistory[joint];
+                if (pts.length < 2) return;
+                const color = JOINT_COLORS[idx % JOINT_COLORS.length];
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(xOf(pts[0].t), yOf(pts[0].angle));
+                for (let i = 1; i < pts.length; i++) {
+                    ctx.lineTo(xOf(pts[i].t), yOf(pts[i].angle));
+                }
+                ctx.stroke();
+            });
+
+            // Legend
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'left';
+            joints.forEach((joint, idx) => {
+                const color = JOINT_COLORS[idx % JOINT_COLORS.length];
+                const lx = PAD_L + idx * 120;
+                ctx.fillStyle = color;
+                ctx.fillRect(lx, 4, 12, 12);
+                ctx.fillStyle = '#333';
+                ctx.fillText(joint, lx + 16, 14);
+            });
+        }
+
+        // Recommendations
+        async function loadRecommendations() {
+            const content = document.getElementById('recoContent');
+            try {
+                const data = await apiCall(`/api/recommendations/engine/${userId}?token=${authToken}`);
+                if (data.suggestions && data.suggestions.length > 0) {
+                    let html = '<table><thead><tr><th>Joint</th><th>Accuracy</th><th>Priority</th><th>Suggestion</th></tr></thead><tbody>';
+                    for (const s of data.suggestions) {
+                        html += `<tr><td>${s.joint}</td><td>${s.accuracy_percent}%</td><td>${s.priority}</td><td>${s.suggestion}</td></tr>`;
+                    }
+                    html += '</tbody></table>';
+                    content.innerHTML = html;
+                } else {
+                    content.innerHTML = '<div class="status status-info">No recommendations available yet. Complete some sessions first.</div>';
+                }
+                log('Recommendations loaded');
+            } catch (e) {
+                content.innerHTML = `<div class="status status-error">Failed: ${e.message}</div>`;
+                log(`Load recommendations failed: ${e.message}`);
+            }
+        }
+
+        log('Application loaded. Please login or register to start.');
+    </script>
+</body>
+</html>
