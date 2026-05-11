@@ -136,6 +136,7 @@ class S2SessionControl:
             on_samples=self._buffer.push_samples,
             on_angles=self._buffer.push_angles,
             on_error=self._buffer.push_error,
+            session_id=sessionId,
         )
         self._core.start()
 

@@ -9,6 +9,7 @@ S2-02: Data acquisition core.
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import math
 import threading
@@ -278,6 +279,7 @@ class DataAcqCore:
         on_angles=None,        # callback(List[TargetAngle])
         on_error=None,         # callback(ErrorEvent)
         poll_interval: float = POLL_INTERVAL_SEC,
+        session_id: int = -1,
     ) -> None:
         self._source = data_source
         self._mapping = sensor_joint_mapping
@@ -296,6 +298,13 @@ class DataAcqCore:
 
         # Angle log file
         self._angle_log = self._init_angle_log()
+        
+        self._json_log_data = {
+            "sessionId": session_id,
+            "targetAngles": [],
+            "errors": [],
+            "sensorData": []
+        }
 
     @property
     def sample_count(self) -> int:
@@ -344,6 +353,23 @@ class DataAcqCore:
         )
         self._thread.start()
 
+    def _to_iso(self, ts_ms: int) -> str:
+        """Convert ms timestamp to ISO 8601 with Z suffix"""
+        return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    def _dump_json_log(self) -> None:
+        log_dir = Path("log")
+        log_dir.mkdir(exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_path = log_dir / f"session_{self._json_log_data['sessionId']}_{ts}.json"
+        
+        try:
+            with open(log_path, "w", encoding="utf-8") as f:
+                json.dump(self._json_log_data, f, ensure_ascii=False, indent=2)
+            LOGGER.info("JSON log file dumped to: %s", log_path)
+        except Exception as e:
+            LOGGER.error("Failed to dump JSON log: %s", e)
+
     def stop(self) -> None:
         self._running = False
         if self._thread and self._thread.is_alive():
@@ -358,6 +384,9 @@ class DataAcqCore:
             except Exception:
                 LOGGER.exception("Error in S2 core poll loop")
             time.sleep(self._poll_interval)
+            
+        # Write JSON log when the poll loop ends
+        self._dump_json_log()
 
     def _poll_once(self) -> None:
         # Check sensor status
@@ -383,6 +412,14 @@ class DataAcqCore:
             if err is None:
                 valid_samples.append(sample)
                 self._sample_count += 1
+                
+                self._json_log_data["sensorData"].append({
+                    "timestamp": self._to_iso(sample.timestamp),
+                    "sensorId": sample.deviceId,
+                    "accX": sample.accX, "accY": sample.accY, "accZ": sample.accZ,
+                    "gyroX": sample.gyroX, "gyroY": sample.gyroY, "gyroZ": sample.gyroZ,
+                    "roll": sample.roll, "pitch": sample.pitch, "yaw": sample.yaw
+                })
             else:
                 self._error_count += 1
                 self._emit_error(
@@ -400,11 +437,34 @@ class DataAcqCore:
 
         # Compute angles
         angles = self._angle_computer.feed_samples(valid_samples)
+        
+        # 添加 targetAngles 必须在 if angles 外部或内部确保正确记录
         if angles:
             self._log_angles(angles)
             if self._on_angles:
                 self._on_angles(angles)
+                
+            for a in angles:
+                self._json_log_data["targetAngles"].append({
+                    "timestamp": self._to_iso(a.timestamp),
+                    "angleID": a.angleID,
+                    "angle": a.angle
+                })
+                
+            for a in angles:
+                self._json_log_data["targetAngles"].append({
+                    "timestamp": self._to_iso(a.timestamp),
+                    "angleID": a.angleID,
+                    "angle": a.angle
+                })
 
     def _emit_error(self, event: ErrorEvent) -> None:
         if self._on_error:
             self._on_error(event)
+            
+        self._json_log_data["errors"].append({
+            "timestamp": self._to_iso(event.timestamp),
+            "sensorId": event.sensorId,
+            "errorType": event.errorType,
+            "message": event.message
+        })

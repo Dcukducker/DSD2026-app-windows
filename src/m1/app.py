@@ -192,15 +192,28 @@ def create_app(s2_module, api_client: Optional[V2ApiClient] = None) -> Flask:
         """Stop data acquisition on S2 and end session on V2."""
         data = request.get_json()
         try:
-            summary = get_s2().session.stop()
+            s2_session = get_s2().session
+            core_log_data = s2_session._core._json_log_data if s2_session._core else None
+            
+            summary = s2_session.stop()
 
             if data.get("token") and data.get("sessionId"):
                 try:
+                    if core_log_data:
+                        get_api().upload_measurement(
+                            session_id=data["sessionId"],
+                            target_angles=core_log_data.get("targetAngles", []),
+                            errors=core_log_data.get("errors", []),
+                            sensor_data=core_log_data.get("sensorData", []),
+                            token=data["token"]
+                        )
+                        LOGGER.info("Successfully uploaded full session data to V2 measurements raw endpoint.")
+                        
                     get_api().end_session(
                         session_id=data["sessionId"], token=data["token"]
                     )
                 except Exception as v2_err:
-                    LOGGER.warning("Failed to end V2 session: %s", v2_err)
+                    LOGGER.warning("Failed to end V2 session or upload data wrapper errored: %s", v2_err)
 
             return jsonify({
                 "sessionId": summary.sessionId,

@@ -131,7 +131,7 @@ class V2ApiClient:
             "sensorData": sensor_data,
         }
         resp = self._session.post(
-            self._url("/measurements"),
+            self._url("/measurements/raw"),
             json=payload,
             headers=self._auth_header(token),
         )
